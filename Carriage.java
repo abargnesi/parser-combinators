@@ -7,11 +7,16 @@ record Source(int offset, String text) {
 }
 
 sealed interface Result<T> permits Result.Value, Result.Error {
-    record Value<T>(T value) implements Result<T> {
+    record Value<T>(Source source, T value) implements Result<T> {
 
         @Override
         public Optional<T> getValue() {
             return Optional.of(value);
+        }
+
+        @Override
+        public Source getSource() {
+            return source;
         }
 
         @Override
@@ -26,6 +31,11 @@ sealed interface Result<T> permits Result.Value, Result.Error {
         public Optional<T> getValue() {
             return Optional.empty();
         }
+        
+        @Override
+        public Source getSource() {
+            return source;
+        }
 
         @Override
         public Optional<String> getErrorMessage() {
@@ -37,8 +47,8 @@ sealed interface Result<T> permits Result.Value, Result.Error {
         }
     }
 
-    static <T> Value<T> ofValue(T value) {
-        return new Value<T>(value);
+    static <T> Value<T> ofValue(Source source, T value) {
+        return new Value<T>(source, value);
     }
 
     static <T> Error<T> ofError(Source source, String expected, String actual) {
@@ -46,6 +56,8 @@ sealed interface Result<T> permits Result.Value, Result.Error {
     }
 
     Optional<T> getValue();
+
+    Source getSource();
 
     Optional<String> getErrorMessage();
 }
@@ -55,17 +67,41 @@ interface Parser<T> {
 }
 
 void main() {
-  Result<String> valueResult = Result.ofValue("success");
+  Source source = new Source(0, "ABC123");
+    
+  Result<String> valueResult = Result.ofValue(source, "success");
   System.out.println("""
     Type: %s
+    Source: %s
     Value: %s
-    """.formatted(valueResult.getClass(), valueResult.getValue()));
+    """.formatted(valueResult.getClass(), valueResult.getSource(), valueResult.getValue()));
 
-  Result<String> errorResult = Result.ofError(new Source(0, "ABC"), "number", "letter");
+  Result<String> errorResult = Result.ofError(source, "number", "letter");
   System.out.println("""
     Type: %s
+    Source: %s
     Value: %s
-    """.formatted(errorResult.getClass(), errorResult.getValue()));
+    """.formatted(errorResult.getClass(), errorResult.getSource(), errorResult.getValue()));
+
+  {
+    NumberParser num = new NumberParser();
+    Result<Integer> r = num.parse(new Source(0, "5060"));
+    System.out.println(
+      switch(r) {
+        case Result.Value v -> v.getValue();
+        case Result.Error e -> e.getErrorMessage();
+      });
+  }
+
+  {
+    NumberParser num = new NumberParser();
+    Result<Integer> r = num.parse(new Source(0, "ABC"));
+    System.out.println(
+      switch(r) {
+        case Result.Value v -> v.getValue();
+        case Result.Error e -> e.getErrorMessage();
+      });
+  }
 
   System.out.println("done");
 }
@@ -73,30 +109,28 @@ void main() {
 class NumberParser implements Parser<Integer> {
 
     public Result<Integer> parse(Source source) {
-      // StringBuilder b = null;
-      // for (int i = s.offset, l = source.text.length(); i < l; i++) {
-      //   int cp = source.text.codePointAt(i);
-      //   if (Character.isDigit(cp)) {
-      //     if (b == null) {
-      //       b = new StringBuilder();
-      //     }
-      //     b.append(Integer.parseInt(Character.toString(cp)));
-      //   } else {
-      //     break;
-      //   }
-      // }
+      StringBuilder b = null;
+      for (int i = source.offset, l = source.text.length(); i < l; i++) {
+        int cp = source.text.codePointAt(i);
+        if (Character.isDigit(cp)) {
+          if (b == null) {
+            b = new StringBuilder();
+          }
+          b.append(Integer.parseInt(Character.toString(cp)));
+        } else {
+          break;
+        }
+      }
 
-      // if (b == null || b.isEmpty()) {
-      //   // did not find a number
-      //   return new Result<>(s, Optional.empty(), NoError);
-      // } else {
-      //   // found a whole number
-      //   String numberString = b.toString();
-      //   return new Result<>(
-      //       new Source(s.input, s.offset + numberString.length()),
-      //       Optional.of(new Value<>(Long.parseLong(numberString))),
-      //       NoError);
-      // }
-      return null;
+      if (b == null || b.isEmpty()) {
+        // did not find a number
+        return Result.ofError(source, "number", "empty");
+      } else {
+        // found a whole number
+        String s = b.toString();
+        return Result.ofValue(
+            new Source(source.offset + s.length(), source.text),
+            Integer.parseInt(s));
+      }
     }
 }
