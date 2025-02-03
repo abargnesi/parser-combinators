@@ -1,5 +1,19 @@
 import java.util.Optional;
 
+sealed interface Either<L, R> permits Either.Left, Either.Right {
+  record Left<L, R>(L value) implements Either<L, R> {}
+
+  record Right<L, R>(R value) implements Either<L, R> {}
+
+  static <L, R> Either<L, R> ofLeft(L value) {
+    return new Left<>(value);
+  }
+
+  static <L, R> Either<L, R> ofRight(R value) {
+    return new Right<>(value);
+  }
+}
+
 record Source(int offset, String text) {
 }
 
@@ -61,6 +75,16 @@ sealed interface Result<T> permits Result.Value, Result.Error {
 
 interface Parser<T> {
     Result<T> parse(Source source);
+
+    default <U> Parser<Either<T, U>> or(Parser<U> other) {
+        return source -> {
+            Result<T> lhr = this.parse(source);
+            return switch(lhr) {
+              case Result.Value<T> v -> Result.ofValue(lhr.getSource(), Either.ofLeft(lhr));
+              case Result.Error<T> e -> other.parse(source);
+            };
+        };
+    }
 }
 
 void main() {
