@@ -1,4 +1,5 @@
 import java.util.Optional;
+import java.util.function.Function;
 
 sealed interface Either<L, R> permits Either.Left, Either.Right {
   record Left<L, R>(L value) implements Either<L, R> {}
