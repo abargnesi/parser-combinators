@@ -99,6 +99,7 @@ void main() {
   }
 
   {
+    System.out.println("Parsing number: 5060");
     NumberParser num = new NumberParser();
     Result<Integer> r = num.parse(new Source(0, "5060"));
     System.out.println(
@@ -109,6 +110,7 @@ void main() {
   }
 
   {
+    System.out.println("Parsing number: ABC");
     NumberParser num = new NumberParser();
     Result<Integer> r = num.parse(new Source(0, "ABC"));
     System.out.println(
@@ -119,13 +121,48 @@ void main() {
   }
 
   {
+    System.out.println("Parsing literal: 'Carriage'");
     Source source = new Source(0, "'Carriage'");
-    Result<String> wordResult = token("'").and(word().map(w -> token("'").and(value(w.getValue().get())))).parse(source);
+    Result<String> wordResult = Parser.
+                    token("'")
+                      .and(
+                      Parser.word().map(w -> Parser.token("'").and(Parser.value(w.getValue().get())))
+                    ).parse(source);
     System.out.printf("""
         Type: %s
         Source: %s
         Value: %s
         %n""", wordResult.getClass(), wordResult.getSource(), wordResult.getValue());
+  }
+
+  {
+      System.out.println("Parsing (incomplete literal)*: 'Carr'");
+      Source source = new Source(0, "'Carr");
+      Result<List<String>> wordResult = Parser.oneOrMore(Parser.
+              token("'")
+              .and(
+                      Parser.word().map(w -> Parser.token("'").and(Parser.value(w.getValue().get())))
+              )).parse(source);
+      System.out.printf("""
+      Type: %s
+      Source: %s
+      Value: %s
+      %n""", wordResult.getClass(), wordResult.getSource(), wordResult.getValue());
+  }
+
+  {
+      System.out.println("Parsing (literal+): 'Carriage''Text''Manipulation''Language'");
+      Source source = new Source(0, "'Carriage''Text''Manipulation''Language'");
+      Result<List<String>> wordResult = Parser.oneOrMore(Parser.
+              token("'")
+              .and(
+                      Parser.word().map(w -> Parser.token("'").and(Parser.value(w.getValue().get())))
+              )).parse(source);
+      System.out.printf("""
+    Type: %s
+    Source: %s
+    Value: %s
+    %n""", wordResult.getClass(), wordResult.getSource(), wordResult.getValue());
   }
 
   System.out.println("done");
@@ -241,10 +278,73 @@ interface Parser<T> {
             case Result.Error<T> e -> Result.ofError(e);
         };
     }
-}
 
-static <T> ValueParser<T> value(T value) {
-    return new ValueParser<>(value);
+    static <T> Parser<List<T>> zeroOrMore(Parser<T> parser) {
+        return source -> {
+            System.out.println("parsing: zeroOrMore");
+            List<T> results = new ArrayList<>();
+            Source nextSource = source;
+            boolean stop = false;
+            while (!stop) {
+                Result<T> result = parser.parse(nextSource);
+                switch(result) {
+                    case Result.Value<T> v -> results.add(v.value);
+                    case Result.Error<T> _ -> stop = true;
+                }
+
+                nextSource = result.getSource();
+            }
+            return Result.ofValue(nextSource, results);
+        };
+    }
+
+    static <T> Parser<List<T>> oneOrMore(Parser<T> parser) {
+        return source -> {
+            System.out.println("parsing: oneOrMore");
+            List<T> results = new ArrayList<>();
+            Source nextSource = source;
+
+            // require first occurrence
+            Result<T> result = parser.parse(nextSource);
+            if (result instanceof Result.Value<T> v) {
+                results.add(v.value);
+            } else if (result instanceof Result.Error<T> e) {
+                return Result.ofError(e);
+            }
+
+            // advance past first occurrence
+            nextSource = result.getSource();
+
+            // parse remaining occurrences (or none)
+            boolean stop = false;
+            while (!stop) {
+                result = parser.parse(nextSource);
+                switch(result) {
+                    case Result.Value<T> v -> results.add(v.value);
+                    case Result.Error<T> _ -> stop = true;
+                }
+
+                nextSource = result.getSource();
+            }
+            return Result.ofValue(nextSource, results);
+        };
+    }
+
+    static <T> ValueParser<T> value(T value) {
+        return new ValueParser<>(value);
+    }
+
+    static TokenParser token(String token) {
+        return new TokenParser(token);
+    }
+
+    static WordParser word() {
+        return new WordParser();
+    }
+
+    static NumberParser num() {
+        return new NumberParser();
+    }
 }
 
 static class ValueParser<T> implements Parser<T> {
@@ -257,12 +357,9 @@ static class ValueParser<T> implements Parser<T> {
 
     @Override
     public Result<T> parse(Source source) {
+        System.out.println("parsing: value");
         return Result.ofValue(source, value);
     }
-}
-
-static TokenParser token(String token) {
-    return new TokenParser(token);
 }
 
 static class TokenParser implements Parser<String> {
@@ -275,20 +372,18 @@ static class TokenParser implements Parser<String> {
 
     @Override
     public Result<String> parse(Source source) {
-        return source.text.startsWith(token) ?
+        System.out.println("parsing: token");
+        return source.text.startsWith(token, source.offset) ?
                 Result.ofValue(new Source(source.offset + token.length(), source.text), token) :
                 Result.ofError(source, "token " + token, "not the token " + token);
     }
-}
-
-static WordParser word() {
-    return new WordParser();
 }
 
 static class WordParser implements Parser<String> {
 
     @Override
     public Result<String> parse(Source source) {
+        System.out.println("parsing: word");
         StringBuilder b = null;
         for (int i = source.offset, l = source.text.length(); i < l; i++) {
             int cp = source.text.codePointAt(i);
@@ -313,13 +408,10 @@ static class WordParser implements Parser<String> {
     }
 }
 
-static NumberParser num() {
-    return new NumberParser();
-}
-
 static class NumberParser implements Parser<Integer> {
 
     public Result<Integer> parse(Source source) {
+      System.out.println("parsing: number");
       StringBuilder b = null;
       for (int i = source.offset, l = source.text.length(); i < l; i++) {
         int cp = source.text.codePointAt(i);
