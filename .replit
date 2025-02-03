@@ -1,0 +1,18 @@
+modules = ["zulu21"]
+run = [
+  "java",
+  "--source 21",
+  "--enable-preview",
+  "Carriage.java",
+]
+
+[nix]
+channel = "stable-24_05"
+
+[deployment]
+run = [
+  "sh",
+  "-c",
+  "java",
+  "Carriage.java",
+]
