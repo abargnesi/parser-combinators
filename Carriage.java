@@ -1,8 +1,5 @@
 import java.util.Optional;
 
-record Error(String message) {
-}
-
 record Source(int offset, String text) {
 }
 
@@ -70,26 +67,26 @@ void main() {
   Source source = new Source(0, "ABC123");
     
   Result<String> valueResult = Result.ofValue(source, "success");
-  System.out.println("""
-    Type: %s
-    Source: %s
-    Value: %s
-    """.formatted(valueResult.getClass(), valueResult.getSource(), valueResult.getValue()));
+  System.out.printf("""
+          Type: %s
+          Source: %s
+          Value: %s
+          %n""", valueResult.getClass(), valueResult.getSource(), valueResult.getValue());
 
   Result<String> errorResult = Result.ofError(source, "number", "letter");
-  System.out.println("""
-    Type: %s
-    Source: %s
-    Value: %s
-    """.formatted(errorResult.getClass(), errorResult.getSource(), errorResult.getValue()));
+  System.out.printf("""
+          Type: %s
+          Source: %s
+          Value: %s
+          %n""", errorResult.getClass(), errorResult.getSource(), errorResult.getValue());
 
   {
     NumberParser num = new NumberParser();
     Result<Integer> r = num.parse(new Source(0, "5060"));
     System.out.println(
       switch(r) {
-        case Result.Value v -> v.getValue();
-        case Result.Error e -> e.getErrorMessage();
+        case Result.Value<Integer> v -> v.getValue();
+        case Result.Error<Integer> e -> e.getErrorMessage();
       });
   }
 
@@ -98,15 +95,15 @@ void main() {
     Result<Integer> r = num.parse(new Source(0, "ABC"));
     System.out.println(
       switch(r) {
-        case Result.Value v -> v.getValue();
-        case Result.Error e -> e.getErrorMessage();
+        case Result.Value<Integer> v -> v.getValue();
+        case Result.Error<Integer> e -> e.getErrorMessage();
       });
   }
 
   System.out.println("done");
 }
 
-class NumberParser implements Parser<Integer> {
+static class NumberParser implements Parser<Integer> {
 
     public Result<Integer> parse(Source source) {
       StringBuilder b = null;
