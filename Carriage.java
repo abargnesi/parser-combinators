@@ -8,9 +8,33 @@ record Source(int offset, String text) {
 
 sealed interface Result<T> permits Result.Value, Result.Error {
     record Value<T>(T value) implements Result<T> {
+
+        @Override
+        public Optional<T> getValue() {
+            return Optional.of(value);
+        }
+
+        @Override
+        public Optional<String> getErrorMessage() {
+            return Optional.empty();
+        }
     }
 
     record Error<T>(Source source, String expected, String actual) implements Result<T> {
+
+        @Override
+        public Optional<T> getValue() {
+            return Optional.empty();
+        }
+
+        @Override
+        public Optional<String> getErrorMessage() {
+            return Optional.of("""
+              Error occurred at %d in '%s'.
+                expected: %s
+                actual:   %s
+              """);
+        }
     }
 
     static <T> Value<T> ofValue(T value) {
@@ -18,8 +42,12 @@ sealed interface Result<T> permits Result.Value, Result.Error {
     }
 
     static <T> Error<T> ofError(Source source, String expected, String actual) {
-        return new Error<T>(source, expected, actual);
+        return new Error<>(source, expected, actual);
     }
+
+    Optional<T> getValue();
+
+    Optional<String> getErrorMessage();
 }
 
 interface Parser<T> {
@@ -28,11 +56,17 @@ interface Parser<T> {
 
 void main() {
   Result<String> valueResult = Result.ofValue("success");
-  System.out.println(valueResult.value);
+  System.out.println("""
+    Type: %s
+    Value: %s
+    """.formatted(valueResult.getClass(), valueResult.getValue()));
 
   Result<String> errorResult = Result.ofError(new Source(0, "ABC"), "number", "letter");
-  System.out.println(errorResult);
-    
+  System.out.println("""
+    Type: %s
+    Value: %s
+    """.formatted(errorResult.getClass(), errorResult.getValue()));
+
   System.out.println("done");
 }
 
