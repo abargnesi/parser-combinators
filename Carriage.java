@@ -80,92 +80,62 @@ sealed interface Result<T> permits Result.Value, Result.Error {
     Optional<String> getErrorMessage();
 }
 
+static <T> void valueTest(String text, Parser<T> parser, Result.Value<T> expected) {
+    Result<T> result = parser.parse(new Source(0, text));
+    switch(result) {
+        case Result.Value<T> v -> {
+            if (!v.equals(expected)) {
+                throw new AssertionError("failed: result did not equal expected");
+            } else {
+                System.out.printf("""
+                    Value Successful
+                    Type: %s
+                    Source: %s
+                    Value: %s
+                    %n""", v.getClass(), v.getSource(), v.getValue());
+            }
+        }
+        case Result.Error<T> _ -> throw new AssertionError("failed: parse failure for %s".formatted(text));
+    };
+}
+
+static <T> void errorTest(String text, Parser<T> parser, Result.Error<T> expected) {
+    Result<T> result = parser.parse(new Source(0, text));
+    switch(result) {
+        case Result.Error<T> e -> {
+            if (!e.equals(expected)) {
+                throw new AssertionError("failed: error did not equal expected");
+            } else {
+                System.out.printf("""
+                    Error Successful
+                    Type: %s
+                    Source: %s
+                    ErrorMessage: %s
+                    %n""", e.getClass(), e.getSource(), e.getErrorMessage());
+            }
+        }
+        case Result.Value<T> _ -> throw new AssertionError("failed: received value instead of error");
+    };
+}
 
 void main() {
-  {
-    Source source = new Source(0, "ABC123");
+  valueTest("5060", new NumberParser(), Result.ofValue(new Source(4, "5060"), 5060));
+  errorTest("ABC", new NumberParser(), Result.ofError(new Source(0, "ABC"), "number", "empty"));
 
-    Result<String> valueResult = Result.ofValue(source, "success");
-    System.out.printf("""
-            Type: %s
-            Source: %s
-            Value: %s
-            %n""", valueResult.getClass(), valueResult.getSource(), valueResult.getValue());
+  valueTest(
+      "'Carriage'",
+      Parser.token("'").and(Parser.word().map(w -> Parser.token("'").and(Parser.value(w.getValue().get())))),
+      Result.ofValue(new Source(10, "'Carriage'"), "Carriage"));
 
-    Result<String> errorResult = Result.ofError(source, "number", "letter");
-    System.out.printf("""
-            Type: %s
-            Source: %s
-            Value: %s
-            %n""", errorResult.getClass(), errorResult.getSource(), errorResult.getValue());
-  }
+  errorTest(
+      "'Carr",
+      Parser.oneOrMore(Parser. token("'").and( Parser.word().map(w -> Parser.token("'").and(Parser.value(w.getValue().get()))))),
+      Result.ofError(new Source(5, "'Carr"), "token '", "not the token '"));
 
-  {
-    System.out.println("Parsing number: 5060");
-    NumberParser num = new NumberParser();
-    Result<Integer> r = num.parse(new Source(0, "5060"));
-    System.out.println(
-      switch(r) {
-        case Result.Value<Integer> v -> v.getValue();
-        case Result.Error<Integer> e -> e.getErrorMessage();
-      });
-  }
-
-  {
-    System.out.println("Parsing number: ABC");
-    NumberParser num = new NumberParser();
-    Result<Integer> r = num.parse(new Source(0, "ABC"));
-    System.out.println(
-      switch(r) {
-        case Result.Value<Integer> v -> v.getValue();
-        case Result.Error<Integer> e -> e.getErrorMessage();
-      });
-  }
-
-  {
-    System.out.println("Parsing literal: 'Carriage'");
-    Source source = new Source(0, "'Carriage'");
-    Result<String> wordResult = Parser.
-                    token("'")
-                      .and(
-                      Parser.word().map(w -> Parser.token("'").and(Parser.value(w.getValue().get())))
-                    ).parse(source);
-    System.out.printf("""
-        Type: %s
-        Source: %s
-        Value: %s
-        %n""", wordResult.getClass(), wordResult.getSource(), wordResult.getValue());
-  }
-
-  {
-      System.out.println("Parsing (incomplete literal)*: 'Carr'");
-      Source source = new Source(0, "'Carr");
-      Result<List<String>> wordResult = Parser.oneOrMore(Parser.
-              token("'")
-              .and(
-                      Parser.word().map(w -> Parser.token("'").and(Parser.value(w.getValue().get())))
-              )).parse(source);
-      System.out.printf("""
-      Type: %s
-      Source: %s
-      Value: %s
-      %n""", wordResult.getClass(), wordResult.getSource(), wordResult.getValue());
-  }
-
-  {
-      System.out.println("Parsing (literal+): 'Carriage''Text''Manipulation''Language'");
-      Source source = new Source(0, "'Carriage''Text''Manipulation''Language'");
-      Result<List<String>> wordResult = Parser.oneOrMore(Parser.
-              token("'")
-              .and(
-                      Parser.word().map(w -> Parser.token("'").and(Parser.value(w.getValue().get())))
-              )).parse(source);
-      System.out.printf("""
-    Type: %s
-    Source: %s
-    Value: %s
-    %n""", wordResult.getClass(), wordResult.getSource(), wordResult.getValue());
-  }
+  valueTest(
+      "'Carriage''Text''Manipulation''Language'",
+      Parser.oneOrMore(Parser. token("'").and( Parser.word().map(w -> Parser.token("'").and(Parser.value(w.getValue().get()))))),
+      Result.ofValue(new Source(40, "'Carriage''Text''Manipulation''Language'"), List.of("Carriage", "Text", "Manipulation", "Language")));
 
   System.out.println("done");
 }
@@ -283,7 +253,6 @@ interface Parser<T> {
 
     static <T> Parser<List<T>> zeroOrMore(Parser<T> parser) {
         return source -> {
-            System.out.println("parsing: zeroOrMore");
             List<T> results = new ArrayList<>();
             Source nextSource = source;
             boolean stop = false;
@@ -302,7 +271,6 @@ interface Parser<T> {
 
     static <T> Parser<List<T>> oneOrMore(Parser<T> parser) {
         return source -> {
-            System.out.println("parsing: oneOrMore");
             List<T> results = new ArrayList<>();
             Source nextSource = source;
 
@@ -359,7 +327,6 @@ static class ValueParser<T> implements Parser<T> {
 
     @Override
     public Result<T> parse(Source source) {
-        System.out.println("parsing: value");
         return Result.ofValue(source, value);
     }
 }
@@ -374,7 +341,6 @@ static class TokenParser implements Parser<String> {
 
     @Override
     public Result<String> parse(Source source) {
-        System.out.println("parsing: token");
         return source.text.startsWith(token, source.offset) ?
                 Result.ofValue(new Source(source.offset + token.length(), source.text), token) :
                 Result.ofError(source, "token " + token, "not the token " + token);
@@ -385,7 +351,6 @@ static class WordParser implements Parser<String> {
 
     @Override
     public Result<String> parse(Source source) {
-        System.out.println("parsing: word");
         StringBuilder b = null;
         for (int i = source.offset, l = source.text.length(); i < l; i++) {
             int cp = source.text.codePointAt(i);
@@ -413,7 +378,6 @@ static class WordParser implements Parser<String> {
 static class NumberParser implements Parser<Integer> {
 
     public Result<Integer> parse(Source source) {
-      System.out.println("parsing: number");
       StringBuilder b = null;
       for (int i = source.offset, l = source.text.length(); i < l; i++) {
         int cp = source.text.codePointAt(i);
