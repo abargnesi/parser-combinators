@@ -3,7 +3,7 @@ run = [
   "java",
   "--source 21",
   "--enable-preview",
-  "Carriage.java",
+  "Carriage2.java",
 ]
 
 [nix]
@@ -14,5 +14,5 @@ run = [
   "sh",
   "-c",
   "java",
-  "Carriage.java",
+  "Carriage2.java",
 ]
