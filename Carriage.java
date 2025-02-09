@@ -62,7 +62,7 @@ sealed interface Result<T> permits Result.Value, Result.Error {
     }
 
     static <T> Value<T> ofValue(Source source, T value) {
-        return new Value<T>(source, value);
+        return new Value<>(source, value);
     }
 
     static <T> Error<T> ofError(Source source, String expected, String actual) {
@@ -119,6 +119,15 @@ static <T> void errorTest(String text, Parser<T> parser, Result.Error<T> expecte
 }
 
 void main() {
+  // TODO
+  // 1. Add ParseOption and thread through Parser.parse. Maintain indentation and print out parser results.
+  // 2. Implement Go command with token `g` (e.g., `g-w`).
+  // 3. Implement upcase (:up) and downcase (:dn) functions.
+  //    Do these actions functions require context to act on?
+  //    If not provided, is the current position assumed the context? I don't like implicits, so likely not.
+  //    :dn(.)  -> downcase the current position
+  //    :dn(.w) -> downcase the current word
+
   valueTest("5060", new NumberParser(), Result.ofValue(new Source(4, "5060"), 5060));
   errorTest("ABC", new NumberParser(), Result.ofError(new Source(0, "ABC"), "number", "empty"));
 
@@ -129,13 +138,16 @@ void main() {
 
   errorTest(
       "'Carr",
-      Parser.oneOrMore(Parser. token("'").and( Parser.word().map(w -> Parser.token("'").and(Parser.value(w.getValue().get()))))),
+      Parser.oneOrMore(Parser.token("'").and( Parser.word().map(w -> Parser.token("'").and(Parser.value(w.getValue().get()))))),
       Result.ofError(new Source(5, "'Carr"), "token '", "not the token '"));
 
   valueTest(
       "'Carriage''Text''Manipulation''Language'",
-      Parser.oneOrMore(Parser. token("'").and( Parser.word().map(w -> Parser.token("'").and(Parser.value(w.getValue().get()))))),
+      Parser.oneOrMore(Parser.token("'").and( Parser.word().map(w -> Parser.token("'").and(Parser.value(w.getValue().get()))))),
       Result.ofValue(new Source(40, "'Carriage''Text''Manipulation''Language'"), List.of("Carriage", "Text", "Manipulation", "Language")));
+
+  Parser<String> wordLiteral = Parser.token("'").and( Parser.word().map(w -> Parser.token("'").and(Parser.value(w.getValue().get()))));
+  valueTest("g'Carriage'", Parser.token("g").and(wordLiteral), Result.ofValue(new Source(11, "g'Carriage'"), "Carriage"));
 
   System.out.println("done");
 }
@@ -204,7 +216,8 @@ void main() {
 /// ```
 /// Char    <- \w
 /// Literal <- "'" Char+ "'"
-/// Num    <- [0-9]+
+/// Num     <- [0-9]+
+/// Go      <- "g" (Literal / Char)+
 /// ```
 ///
 /// Blank space is not necessary but can be used for clear separation. It will be thrown away.
@@ -308,6 +321,10 @@ interface Parser<T> {
         return new TokenParser(token);
     }
 
+    static AnyCharParser anyChar() {
+        return new AnyCharParser();
+    }
+
     static WordParser word() {
         return new WordParser();
     }
@@ -344,6 +361,19 @@ static class TokenParser implements Parser<String> {
         return source.text.startsWith(token, source.offset) ?
                 Result.ofValue(new Source(source.offset + token.length(), source.text), token) :
                 Result.ofError(source, "token " + token, "not the token " + token);
+    }
+}
+
+static class AnyCharParser implements Parser<String> {
+
+    @Override
+    public Result<String> parse(Source source) {
+        try {
+          int cp = source.text.codePointAt(source.offset);
+          return Result.ofValue(new Source(source.offset + 1, source.text), Character.toString(cp));
+        } catch (IndexOutOfBoundsException ex) {
+          return Result.ofError(source, "any character", "end of string");
+        }
     }
 }
 
