@@ -1,15 +1,15 @@
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-static void p(String... values) {
+static void p(Object... values) {
   pd(" ", values);
 }
 
-static void pl(String... values) {
+static void pl(Object... values) {
   pd("\n", values);
 }
 
-static void pd(String delim, String... values) {
+static void pd(String delim, Object... values) {
   if (values == null || values.length == 0) {
     return;
   }
@@ -58,27 +58,42 @@ void main() {
       new Match<>(match, new Source(s.text, s.offset + match.length()), null);
   };
 
+  // Parse zero words.
   {
-    Match<String> match = wordParser.parse(new Source("ThereIsSomethingInTheWater", 0));
-    p(match.value);
+    Parser<String> wordStarParser = zeroOrMore(wordParser);
+    Match<String> match = wordStarParser.parse(new Source("", 0));
+    p(match);
   }
 
+  // Parse one word.
+  {
+    Match<String> match = wordParser.parse(new Source("ThereIsSomethingInTheWater", 0));
+    p(match);
+  }
+
+  // Parse zero or more words.
   {
     Parser<String> wordStarParser = zeroOrMore(wordParser);
     Match<String> match = wordStarParser.parse(new Source("ThereIsSomethingInTheWater", 0));
-    p(match.value);
+    p(match);
   }
 }
 
+/** Higher order parser that matches zero or more occurrences of another parser. */
 static <T> Parser<T> zeroOrMore(Parser<T> p) {
   return s -> {
-    Match<T> m = null;
-    do {
-      System.out.println(s);
-      m = p.parse(s);
-      System.out.println(m);
-    } while (m.error == null);
+    Source nextSource = s;
+    Match<T> lastSuccess = p.parse(nextSource);
+    Match<T> match = lastSuccess;
 
-    return m;
+    while (match.error == null) {
+      nextSource = match.source;
+      
+      match = p.parse(nextSource);
+      // retain last successful match
+      lastSuccess = match.error == null ? match : lastSuccess;
+    }
+
+    return lastSuccess;
   };
 }
